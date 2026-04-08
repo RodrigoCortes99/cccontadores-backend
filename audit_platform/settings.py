@@ -150,3 +150,8 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
+import os
+
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    from django.core.management import call_command
+    call_command("migrate")
