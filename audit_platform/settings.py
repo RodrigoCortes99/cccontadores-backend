@@ -150,3 +150,11 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://cccontadores-backend-production.up.railway.app",
+    "https://darkslategray-wallaby-198227.hostingersite.com",
+]
+
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
