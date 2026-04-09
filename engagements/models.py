@@ -3,11 +3,13 @@ from django.db import models
 
 class Encargo(models.Model):
     class Tipo(models.TextChoices):
-        FINANCIERA = "financiera", "Auditoría financiera"
-        INTERNA = "interna", "Auditoría interna"
-        FISCAL = "fiscal", "Auditoría fiscal (SAT)"
-        ISO = "iso", "Auditoría ISO"
-        PERSONALIZADA = "personalizada", "Personalizada"
+        SEGURO_SOCIAL = "seguro_social", "Auditoría para efectos del Seguro Social"
+        IMPUESTOS_ESTATALES = "impuestos_estatales", "Auditoría de Impuestos Estatales"
+        GUBERNAMENTAL = "gubernamental", "Auditoría Gubernamental"
+        CONTABILIDAD_FINANCIERA = "contabilidad_financiera", "Contabilidad Financiera"
+        PRECIOS_TRANSFERENCIA = "precios_transferencia", "Precios de Transferencia"
+        ASESORIA = "asesoria", "Asesoría"
+        COMPLIANCE = "compliance", "Compliance"
 
     class Estatus(models.TextChoices):
         PLANEACION = "planeacion", "Planeación"
@@ -29,10 +31,16 @@ class Encargo(models.Model):
     )
 
     tipo = models.CharField(
-        max_length=20, choices=Tipo.choices, default=Tipo.FINANCIERA, verbose_name="Tipo"
+        max_length=40,
+        choices=Tipo.choices,
+        default=Tipo.ASESORIA,
+        verbose_name="Tipo",
     )
     estatus = models.CharField(
-        max_length=20, choices=Estatus.choices, default=Estatus.PLANEACION, verbose_name="Estatus"
+        max_length=20,
+        choices=Estatus.choices,
+        default=Estatus.PLANEACION,
+        verbose_name="Estatus",
     )
 
     periodo_inicio = models.DateField(verbose_name="Periodo inicio")
