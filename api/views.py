@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from clients.models import Client
 from engagements.models import Encargo
@@ -15,6 +16,33 @@ from .serializers import (
     SolicitudPBCCreateSerializer,
     SolicitudPBCSerializer,
 )
+
+
+class CurrentUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        client_id = None
+        client_name = None
+
+        if hasattr(user, "client_profile") and user.client_profile:
+            client_id = user.client_profile.id
+            client_name = user.client_profile.name
+
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": getattr(user, "role", None),
+                "organization_id": getattr(user, "organization_id", None),
+                "client_id": client_id,
+                "client_name": client_name,
+                "is_superuser": user.is_superuser,
+            }
+        )
 
 
 class ClientesListView(generics.ListAPIView):
