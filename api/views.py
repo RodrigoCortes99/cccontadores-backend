@@ -2,7 +2,6 @@ from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from clients.models import Client
 from engagements.models import Encargo
@@ -18,51 +17,23 @@ from .serializers import (
 )
 
 
-class CurrentUserView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-
-        client_id = None
-        client_name = None
-        if hasattr(user, "client_profile"):
-            client_id = user.client_profile.id
-            client_name = user.client_profile.name
-
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "role": getattr(user, "role", None),
-                "organization_id": user.organization_id,
-                "client_id": client_id,
-                "client_name": client_name,
-                "is_superuser": user.is_superuser,
-            }
-        )
-
-
 class ClientesListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ClienteSerializer
 
     def get_queryset(self):
         user = self.request.user
-        qs = Client.objects.all().order_by("name")
 
-        if user.is_superuser:
-            return qs
+        if getattr(user, "is_superuser", False):
+            return Client.objects.all().order_by("name")
 
-        if getattr(user, "role", None) == "client":
-            if hasattr(user, "client_profile"):
-                return qs.filter(id=user.client_profile.id)
-            return qs.none()
+        if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
+            return Client.objects.filter(pk=user.client_profile.pk).order_by("name")
 
-        if user.organization_id:
-            return qs.filter(organization=user.organization)
+        if getattr(user, "organization_id", None):
+            return Client.objects.filter(organization_id=user.organization_id).order_by("name")
 
-        return qs.none()
+        return Client.objects.none()
 
 
 class EncargosListView(generics.ListCreateAPIView):
@@ -74,26 +45,20 @@ class EncargosListView(generics.ListCreateAPIView):
         return EncargoSerializer
 
     def get_queryset(self):
-        qs = (
-            Encargo.objects.select_related("organizacion", "cliente")
-            .all()
-            .order_by("-creado_en")
-        )
-
         user = self.request.user
 
-        if user.is_superuser:
-            return qs
+        queryset = Encargo.objects.select_related("organizacion", "cliente").all()
 
-        if getattr(user, "role", None) == "client":
-            if hasattr(user, "client_profile"):
-                return qs.filter(cliente=user.client_profile)
-            return qs.none()
+        if getattr(user, "is_superuser", False):
+            return queryset.order_by("-creado_en")
 
-        if user.organization_id:
-            return qs.filter(organizacion=user.organization)
+        if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
+            return queryset.filter(cliente_id=user.client_profile.pk).order_by("-creado_en")
 
-        return qs.none()
+        if getattr(user, "organization_id", None):
+            return queryset.filter(organizacion_id=user.organization_id).order_by("-creado_en")
+
+        return Encargo.objects.none()
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -113,34 +78,27 @@ class SolicitudesPBCPorEncargoListView(generics.ListCreateAPIView):
         return SolicitudPBCSerializer
 
     def get_queryset(self):
+        user = self.request.user
         encargo_id = self.kwargs["encargo_id"]
 
-        qs = (
-            SolicitudPBC.objects.select_related("organizacion", "encargo", "encargo__cliente")
-            .filter(encargo_id=encargo_id)
-            .order_by("-creado_en")
+        queryset = SolicitudPBC.objects.select_related("organizacion", "encargo").filter(
+            encargo_id=encargo_id
         )
 
-        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return queryset.order_by("-creado_en")
 
-        if user.is_superuser:
-            return qs
+        if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
+            return queryset.filter(encargo__cliente_id=user.client_profile.pk).order_by("-creado_en")
 
-        if getattr(user, "role", None) == "client":
-            if hasattr(user, "client_profile"):
-                return qs.filter(encargo__cliente=user.client_profile)
-            return qs.none()
+        if getattr(user, "organization_id", None):
+            return queryset.filter(organizacion_id=user.organization_id).order_by("-creado_en")
 
-        if user.organization_id:
-            return qs.filter(organizacion=user.organization)
-
-        return qs.none()
+        return SolicitudPBC.objects.none()
 
     def create(self, request, *args, **kwargs):
-        encargo_id = self.kwargs["encargo_id"]
-
         data = request.data.copy()
-        data["encargo"] = encargo_id
+        data["encargo"] = self.kwargs["encargo_id"]
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -155,33 +113,27 @@ class DocumentosPBCPorSolicitudListView(generics.ListAPIView):
     serializer_class = DocumentoPBCSerializer
 
     def get_queryset(self):
+        user = self.request.user
         solicitud_id = self.kwargs["solicitud_id"]
 
-        qs = (
-            DocumentoPBC.objects.select_related(
-                "solicitud",
-                "subido_por",
-                "solicitud__encargo",
-                "solicitud__encargo__cliente",
-            )
-            .filter(solicitud_id=solicitud_id)
-            .order_by("-version")
+        queryset = DocumentoPBC.objects.select_related("solicitud", "subido_por").filter(
+            solicitud_id=solicitud_id
         )
 
-        user = self.request.user
+        if getattr(user, "is_superuser", False):
+            return queryset.order_by("-version")
 
-        if user.is_superuser:
-            return qs
+        if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
+            return queryset.filter(solicitud__encargo__cliente_id=user.client_profile.pk).order_by(
+                "-version"
+            )
 
-        if getattr(user, "role", None) == "client":
-            if hasattr(user, "client_profile"):
-                return qs.filter(solicitud__encargo__cliente=user.client_profile)
-            return qs.none()
+        if getattr(user, "organization_id", None):
+            return queryset.filter(solicitud__organizacion_id=user.organization_id).order_by(
+                "-version"
+            )
 
-        if user.organization_id:
-            return qs.filter(solicitud__organizacion=user.organization)
-
-        return qs.none()
+        return DocumentoPBC.objects.none()
 
 
 class SubirDocumentoPBCView(generics.GenericAPIView):
@@ -190,10 +142,7 @@ class SubirDocumentoPBCView(generics.GenericAPIView):
 
     def post(self, request, solicitud_id: int):
         try:
-            solicitud = SolicitudPBC.objects.select_related(
-                "encargo",
-                "encargo__cliente",
-            ).get(pk=solicitud_id)
+            solicitud = SolicitudPBC.objects.select_related("encargo").get(pk=solicitud_id)
         except SolicitudPBC.DoesNotExist:
             return Response(
                 {"detail": "Solicitud PBC no encontrada."},
@@ -202,24 +151,19 @@ class SubirDocumentoPBCView(generics.GenericAPIView):
 
         user = request.user
 
-        if not user.is_superuser:
-            if getattr(user, "role", None) == "client":
-                if not hasattr(user, "client_profile") or solicitud.encargo.cliente_id != user.client_profile.id:
+        if not getattr(user, "is_superuser", False):
+            if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
+                if solicitud.encargo.cliente_id != user.client_profile.pk:
                     return Response(
-                        {"detail": "No tienes permiso para subir evidencia a esta solicitud."},
+                        {"detail": "No tienes permiso para subir documentos a esta solicitud."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-            elif user.organization_id:
+            elif getattr(user, "organization_id", None):
                 if solicitud.organizacion_id != user.organization_id:
                     return Response(
-                        {"detail": "No tienes permiso para subir evidencia a esta solicitud."},
+                        {"detail": "No tienes permiso para subir documentos a esta solicitud."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-            else:
-                return Response(
-                    {"detail": "No tienes permiso para subir evidencia a esta solicitud."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         archivo = request.FILES.get("archivo")
         if not archivo:
@@ -257,14 +201,7 @@ class SubirDocumentoPBCView(generics.GenericAPIView):
             solicitud.save(update_fields=["estatus", "fecha_recibido"])
 
         return Response(
-            {
-                "id": doc.id,
-                "solicitud": solicitud.id,
-                "version": doc.version,
-                "nombre": doc.nombre,
-                "archivo": doc.archivo.url if doc.archivo else None,
-                "subido_en": doc.subido_en,
-            },
+            DocumentoPBCSerializer(doc).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -274,32 +211,15 @@ class ActualizarEstatusSolicitudPBCView(generics.GenericAPIView):
 
     def patch(self, request, solicitud_id: int):
         try:
-            solicitud = SolicitudPBC.objects.select_related(
-                "encargo",
-                "encargo__cliente",
-            ).get(pk=solicitud_id)
+            solicitud = SolicitudPBC.objects.get(pk=solicitud_id)
         except SolicitudPBC.DoesNotExist:
             return Response(
                 {"detail": "Solicitud PBC no encontrada."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        user = request.user
-
-        if not user.is_superuser:
-            if getattr(user, "role", None) == "client":
-                return Response(
-                    {"detail": "No tienes permiso para cambiar el estatus de esta solicitud."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-            if user.organization_id and solicitud.organizacion_id != user.organization_id:
-                return Response(
-                    {"detail": "No tienes permiso para cambiar el estatus de esta solicitud."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
         estatus = ((request.data.get("estatus") or "")).strip().lower()
+        observaciones_revision = (request.data.get("observaciones_revision") or "").strip()
 
         estatus_validos = {choice[0] for choice in SolicitudPBC.Estatus.choices}
         if estatus not in estatus_validos:
@@ -311,11 +231,23 @@ class ActualizarEstatusSolicitudPBCView(generics.GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if estatus == SolicitudPBC.Estatus.INCOMPLETO and not observaciones_revision:
+            return Response(
+                {
+                    "detail": "Debes escribir una observación cuando marques la solicitud como incompleta."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if estatus == SolicitudPBC.Estatus.RECIBIDO and not solicitud.fecha_recibido:
             solicitud.fecha_recibido = timezone.localdate()
 
+        if estatus != SolicitudPBC.Estatus.INCOMPLETO and observaciones_revision == "":
+            observaciones_revision = solicitud.observaciones_revision
+
         solicitud.estatus = estatus
-        solicitud.save(update_fields=["estatus", "fecha_recibido"])
+        solicitud.observaciones_revision = observaciones_revision
+        solicitud.save(update_fields=["estatus", "fecha_recibido", "observaciones_revision"])
 
         return Response(
             {
@@ -323,6 +255,7 @@ class ActualizarEstatusSolicitudPBCView(generics.GenericAPIView):
                 "estatus": solicitud.estatus,
                 "estatus_display": solicitud.get_estatus_display(),
                 "fecha_recibido": solicitud.fecha_recibido,
+                "observaciones_revision": solicitud.observaciones_revision,
             },
             status=status.HTTP_200_OK,
         )

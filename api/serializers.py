@@ -71,6 +71,7 @@ class SolicitudPBCSerializer(serializers.ModelSerializer):
             "estatus_display",
             "fecha_compromiso",
             "fecha_recibido",
+            "observaciones_revision",
             "creado_en",
         ]
 

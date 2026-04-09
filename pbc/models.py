@@ -4,10 +4,10 @@ from django.db import models
 
 class SolicitudPBC(models.Model):
     class Estatus(models.TextChoices):
-        SOLICITADO = "solicitado", "Solicitado"
+        PENDIENTE = "pendiente", "Pendiente"
         RECIBIDO = "recibido", "Recibido"
-        INCOMPLETO = "incompleto", "Incompleto"
         APROBADO = "aprobado", "Aprobado"
+        INCOMPLETO = "incompleto", "Incompleto"
 
     organizacion = models.ForeignKey(
         "core.Organization",
@@ -28,12 +28,27 @@ class SolicitudPBC(models.Model):
     estatus = models.CharField(
         max_length=20,
         choices=Estatus.choices,
-        default=Estatus.SOLICITADO,
+        default=Estatus.PENDIENTE,
         verbose_name="Estatus",
     )
 
-    fecha_compromiso = models.DateField(null=True, blank=True, verbose_name="Fecha compromiso")
-    fecha_recibido = models.DateField(null=True, blank=True, verbose_name="Fecha recibido")
+    fecha_compromiso = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha compromiso",
+    )
+    fecha_recibido = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha recibido",
+    )
+
+    observaciones_revision = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Observaciones de revisión",
+        help_text="Comentario del auditor para indicar qué falta o qué debe corregirse.",
+    )
 
     creado_en = models.DateTimeField(auto_now_add=True, verbose_name="Creado en")
 
@@ -43,42 +58,34 @@ class SolicitudPBC(models.Model):
         ordering = ["-creado_en"]
 
     def __str__(self) -> str:
-        return f"{self.titulo} ({self.get_estatus_display()})"
+        return f"{self.titulo} - {self.encargo}"
 
 
 class DocumentoPBC(models.Model):
-    class EstatusDocumento(models.TextChoices):
-        RECIBIDO = "recibido", "Recibido"
-        EN_REVISION = "en_revision", "En revisión"
-        OBSERVADO = "observado", "Observado"
-        APROBADO = "aprobado", "Aprobado"
+    class Estatus(models.TextChoices):
+        VIGENTE = "vigente", "Vigente"
+        REEMPLAZADO = "reemplazado", "Reemplazado"
 
     solicitud = models.ForeignKey(
         "pbc.SolicitudPBC",
         on_delete=models.CASCADE,
         related_name="documentos",
-        verbose_name="Solicitud PBC",
+        verbose_name="Solicitud",
     )
-
-    # Versionado automático: 1,2,3... por solicitud
-    version = models.PositiveIntegerField(verbose_name="Versión")
-
+    version = models.PositiveIntegerField(default=1, verbose_name="Versión")
+    nombre = models.CharField(max_length=255, verbose_name="Nombre")
     archivo = models.FileField(upload_to="pbc/", verbose_name="Archivo")
-    nombre = models.CharField(max_length=255, blank=True, default="", verbose_name="Nombre (opcional)")
-
     estatus = models.CharField(
         max_length=20,
-        choices=EstatusDocumento.choices,
-        default=EstatusDocumento.RECIBIDO,
-        verbose_name="Estatus del documento",
+        choices=Estatus.choices,
+        default=Estatus.VIGENTE,
+        verbose_name="Estatus",
     )
-
-    observaciones = models.TextField(blank=True, default="", verbose_name="Observaciones del auditor")
-
+    observaciones = models.TextField(blank=True, default="", verbose_name="Observaciones")
     subido_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="documentos_pbc",
+        related_name="documentos_pbc_subidos",
         verbose_name="Subido por",
     )
     subido_en = models.DateTimeField(auto_now_add=True, verbose_name="Subido en")
@@ -87,13 +94,6 @@ class DocumentoPBC(models.Model):
         verbose_name = "Documento PBC"
         verbose_name_plural = "Documentos PBC"
         ordering = ["-subido_en"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["solicitud", "version"],
-                name="unique_version_por_solicitud",
-            )
-        ]
 
     def __str__(self) -> str:
-        base = self.nombre.strip() or self.archivo.name
-        return f"v{self.version} - {base}"
+        return f"{self.nombre} v{self.version}"
