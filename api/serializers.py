@@ -93,6 +93,7 @@ class SolicitudPBCCreateSerializer(serializers.ModelSerializer):
 
 class DocumentoPBCSerializer(serializers.ModelSerializer):
     solicitud = serializers.PrimaryKeyRelatedField(read_only=True)
+    archivo = serializers.SerializerMethodField()
     estatus_display = serializers.CharField(source="get_estatus_display", read_only=True)
     subido_por = serializers.StringRelatedField()
 
@@ -110,3 +111,8 @@ class DocumentoPBCSerializer(serializers.ModelSerializer):
             "subido_por",
             "subido_en",
         ]
+
+    def get_archivo(self, obj):
+        if obj.archivo:
+            return obj.archivo.url
+        return None
