@@ -126,11 +126,25 @@ class SolicitudesPBCPorEncargoListView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
-        data["encargo"] = self.kwargs["encargo_id"]
+        encargo_id = self.kwargs["encargo_id"]
+        data["encargo"] = encargo_id
+
+    
+        try:
+            encargo = Encargo.objects.get(pk=encargo_id)
+        except Encargo.DoesNotExist:
+            return Response(
+                {"detail": "Encargo no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
-        solicitud = serializer.save()
+
+    
+        solicitud = serializer.save(
+            organizacion=encargo.organizacion
+        )
 
         output_serializer = SolicitudPBCSerializer(solicitud)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
