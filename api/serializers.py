@@ -6,10 +6,18 @@ from engagements.models import Encargo
 from pbc.models import SolicitudPBC, DocumentoPBC
 
 
+class OrganizationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ["id", "name"]
+
+
 class ClienteSerializer(serializers.ModelSerializer):
+    organization = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Client
-        fields = ["id", "name"]
+        fields = ["id", "name", "organization"]
 
 
 class EncargoSerializer(serializers.ModelSerializer):
@@ -52,6 +60,17 @@ class EncargoCreateSerializer(serializers.ModelSerializer):
             "nombre",
             "notas",
         ]
+
+    def validate(self, attrs):
+        organizacion = attrs.get("organizacion")
+        cliente = attrs.get("cliente")
+
+        if organizacion and cliente and cliente.organization_id != organizacion.id:
+            raise serializers.ValidationError(
+                {"cliente": "El cliente no pertenece a la organización seleccionada."}
+            )
+
+        return attrs
 
 
 class SolicitudPBCSerializer(serializers.ModelSerializer):

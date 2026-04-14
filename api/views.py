@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from clients.models import Client
+from core.models import Organization
 from engagements.models import Encargo
 from pbc.models import DocumentoPBC, SolicitudPBC
 
@@ -13,6 +14,7 @@ from .serializers import (
     DocumentoPBCSerializer,
     EncargoCreateSerializer,
     EncargoSerializer,
+    OrganizationSerializer,
     SolicitudPBCCreateSerializer,
     SolicitudPBCSerializer,
 )
@@ -45,6 +47,22 @@ class CurrentUserView(APIView):
         )
 
 
+class OrganizacionesListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrganizationSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if getattr(user, "is_superuser", False):
+            return Organization.objects.all().order_by("name")
+
+        if getattr(user, "organization_id", None):
+            return Organization.objects.filter(id=user.organization_id).order_by("name")
+
+        return Organization.objects.none()
+
+
 class ClientesListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ClienteSerializer
@@ -52,14 +70,16 @@ class ClientesListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
+        queryset = Client.objects.select_related("organization").all()
+
         if getattr(user, "is_superuser", False):
-            return Client.objects.all().order_by("name")
+            return queryset.order_by("name")
 
         if getattr(user, "role", None) == "client" and hasattr(user, "client_profile"):
-            return Client.objects.filter(pk=user.client_profile.pk).order_by("name")
+            return queryset.filter(pk=user.client_profile.pk).order_by("name")
 
         if getattr(user, "organization_id", None):
-            return Client.objects.filter(organization_id=user.organization_id).order_by("name")
+            return queryset.filter(organization_id=user.organization_id).order_by("name")
 
         return Client.objects.none()
 
@@ -129,7 +149,6 @@ class SolicitudesPBCPorEncargoListView(generics.ListCreateAPIView):
         encargo_id = self.kwargs["encargo_id"]
         data["encargo"] = encargo_id
 
-    
         try:
             encargo = Encargo.objects.get(pk=encargo_id)
         except Encargo.DoesNotExist:
@@ -141,7 +160,6 @@ class SolicitudesPBCPorEncargoListView(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
 
-    
         solicitud = serializer.save(
             organizacion=encargo.organizacion
         )
