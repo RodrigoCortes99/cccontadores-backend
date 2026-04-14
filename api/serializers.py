@@ -77,7 +77,7 @@ class SolicitudPBCSerializer(serializers.ModelSerializer):
 
 
 class SolicitudPBCCreateSerializer(serializers.ModelSerializer):
-    organizacion = serializers.PrimaryKeyRelatedField(queryset=Organization.objects.all())
+    organizacion = serializers.PrimaryKeyRelatedField(read_only=True)
     encargo = serializers.PrimaryKeyRelatedField(queryset=Encargo.objects.all())
 
     class Meta:
